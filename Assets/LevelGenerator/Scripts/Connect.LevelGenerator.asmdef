@@ -1,0 +1,16 @@
+{
+    "name": "Connect.LevelGenerator",
+    "rootNamespace": "",
+    "references": [
+        "GUID:ac269ce3a0ac1fa4499ff01a5f1326da"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
