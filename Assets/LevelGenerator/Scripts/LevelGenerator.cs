@@ -1,200 +1,100 @@
+using UnityEngine;
 using Connect.Common;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEditor;
-using UnityEngine;
-
 namespace Connect.Generator
 {
     public class LevelGenerator : MonoBehaviour
     {
-        #region START_METHODS
+        [Header("Level Size")]
+        [SerializeField] private int levelIndex;
+        [SerializeField] private int levelSizeX;
+        [SerializeField] private int levelSizeY;
 
-        [SerializeField] private bool canGeneratorOnce;
+        [Header("Board")]
+        [SerializeField] private SpriteRenderer boardPrefab;
+        [SerializeField] private SpriteRenderer bgCellPrefab;
+        [SerializeField] private float boardPadding = 0.08f;
 
-        [SerializeField] private int stage;
+        private LevelData currentLevelData;
 
-        public int levelSizeX;
-        public int levelSizeY;
         private void Awake()
         {
             SpawnBoard();
-            SpawnNodes();
         }
 
-        [SerializeField] private SpriteRenderer _boardPrefab, _bgCellPrefab;
-
+        // ================= BOARD =================
         private void SpawnBoard()
         {
-            // 1️⃣ Tính tâm của level
             float centerX = levelSizeX / 2f;
             float centerY = levelSizeY / 2f;
 
-            // 2️⃣ Spawn board ở giữa
             var board = Instantiate(
-                _boardPrefab,
-                new Vector3(centerX, centerY, 0f),
-                Quaternion.identity
+                boardPrefab,
+                new Vector3(centerX, centerY, 0),
+                Quaternion.identity,
+                transform
             );
 
-            // 3️⃣ Set size board theo X/Y
             board.size = new Vector2(
-                levelSizeX + 0.08f,
-                levelSizeY + 0.08f
+                levelSizeX + boardPadding,
+                levelSizeY + boardPadding
             );
 
-            // 4️⃣ Spawn background cells
             for (int x = 0; x < levelSizeX; x++)
             {
                 for (int y = 0; y < levelSizeY; y++)
                 {
                     Instantiate(
-                        _bgCellPrefab,
-                        new Vector3(x + 0.5f, y + 0.5f, 0f),
-                        Quaternion.identity
+                        bgCellPrefab,
+                        new Vector3(x + 0.5f, y + 0.5f, 0),
+                        Quaternion.identity,
+                        transform
                     );
                 }
             }
 
-            // 5️⃣ Setup camera
-            Camera cam = Camera.main;
+            SetupCamera(centerX, centerY);
+        }
 
-            // Lấy cạnh lớn hơn để camera fit toàn bộ board
+        private void SetupCamera(float centerX, float centerY)
+        {
+            Camera cam = Camera.main;
             float maxSize = Mathf.Max(levelSizeX, levelSizeY);
 
-            cam.orthographicSize = maxSize / 1.6f + 1f;
+            cam.orthographicSize = maxSize / 2f + 0.5f;
             cam.transform.position = new Vector3(centerX, centerY, -10f);
         }
 
-        [SerializeField] private NodeRenderer _nodePrefab;
-
-        public Dictionary<Point, NodeRenderer> nodeGrid;
-        private NodeRenderer[,] nodeArray;
-
-        private void SpawnNodes()
+        // ================= GENERATE =================
+        public void GenerateAndSave()
         {
-            nodeGrid = new Dictionary<Point, NodeRenderer>();
-            nodeArray = new NodeRenderer[levelSizeX, levelSizeY];
-            Vector3 spawnPos;
-            NodeRenderer spawnedNode;
+            CreateLevelData();
 
-            for (int i = 0; i < levelSizeX; i++)
+            if (!TryGetComponent<GenerateMethod>(out var generator))
             {
-                for (int j = 0; j < levelSizeY; j++)
-                {
-                    spawnPos = new Vector3(i + 0.5f, j + 0.5f, 0f);
-                    spawnedNode = Instantiate(_nodePrefab, spawnPos, Quaternion.identity);
-                    spawnedNode.Init();
-                    nodeGrid.Add(new Point(i, j), spawnedNode);
-                    nodeArray[i, j] = spawnedNode;
-                    spawnedNode.gameObject.name = i.ToString() + j.ToString();
-                }
-            }
-        }
-
-
-        #endregion
-
-        #region BUTTON_FUNCTION
-
-        [SerializeField] private GameObject _simulateButton;
-
-        public void ClickedSimulate()
-        {
-            Levels = new Dictionary<string, LevelData>();
-
-            foreach (var item in _allLevelList.Levels)
-            {
-                Levels[item.LevelName] = item;
-            }
-            GenerateDefault();
-
-            _simulateButton.SetActive(false);
-        }
-
-        [SerializeField] private LevelList _allLevelList;
-        private Dictionary<string, LevelData> Levels;
-
-        #region GENERATE_SINGLE_LEVEL
-        private void GenerateDefault()
-        {
-            GenerateLevelData();
-        }
-
-        public LevelData currentLevelData;
-
-        private void GenerateLevelData(int level = 0)
-        {
-            string currentLevelName = "Level" + stage.ToString() + level.ToString();
-
-            if (!Levels.ContainsKey(currentLevelName))
-            {
-#if UNITY_EDITOR
-                currentLevelData = ScriptableObject.CreateInstance<LevelData>();
-                AssetDatabase.CreateAsset(currentLevelData, "Assets/Common/Prefabs/Levels/" +
-                    currentLevelName + ".asset");
-                AssetDatabase.SaveAssets();
-#endif
-                Levels[currentLevelName] = currentLevelData;
-                _allLevelList.Levels.Add(currentLevelData);
+                Debug.LogError("GenerateMethod not found!");
+                return;
             }
 
-            currentLevelData = Levels[currentLevelName];
-            currentLevelData.LevelName = currentLevelName;
-            GetComponent<GenerateMethod>().Generate();
+            generator.Generate(currentLevelData);
+
+            LevelJsonUtility.Save(currentLevelData);
         }
 
-        #endregion
-
-        #region NODE_RENDERING
-
-        private List<Point> directions = new List<Point>()
-        { Point.up,Point.down,Point.left,Point.right};
-
-        public void RenderGrid(Dictionary<Point, int> grid)
+        private void CreateLevelData()
         {
-            int currentColor;
-            int numOfConnectedNodes;
-
-            foreach (var item in nodeGrid)
+            currentLevelData = new LevelData
             {
-                item.Value.Init();
-                currentColor = grid[item.Key];
-                numOfConnectedNodes = 0;
-
-                if (currentColor != -1)
-                {
-                    foreach (var direction in directions)
-                    {
-                        if (grid.ContainsKey(item.Key + direction) &&
-                            grid[item.Key + direction] == currentColor)
-                        {
-                            item.Value.SetEdge(currentColor, direction);
-                            numOfConnectedNodes++;
-                        }
-                    }
-
-                    if (numOfConnectedNodes <= 1)
-                    {
-                        item.Value.SetEdge(currentColor, Point.zero);
-                    }
-                }
-            }
+                LevelName = $"Level_{levelIndex}",
+                width = levelSizeX,
+                height = levelSizeY
+            };
         }
-
-        private Point[] neighbourPoints = new Point[]
-        {
-            Point.up,Point.left,Point.down, Point.right
-        };
-        #endregion
-
-        #endregion
     }
-
     public interface GenerateMethod
     {
-        public void Generate();
+        void Generate(LevelData levelData);
     }
-
-
 }
