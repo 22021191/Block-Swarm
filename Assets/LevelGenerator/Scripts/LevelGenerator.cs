@@ -1,35 +1,26 @@
 using UnityEngine;
 using Connect.Common;
-using System.Collections;
-using System.Collections.Generic;
-using UnityEditor;
 namespace Connect.Generator
 {
+    [ExecuteAlways]
     public class LevelGenerator : MonoBehaviour
     {
-        [Header("Level Size")]
-        [SerializeField] private int levelIndex;
-        [SerializeField] private int levelSizeX;
-        [SerializeField] private int levelSizeY;
+        [Header("Level Info")]
+        public int levelIndex;
+        public int levelSizeX;
+        public int levelSizeY;
 
-        [Header("Board")]
-        [SerializeField] private SpriteRenderer boardPrefab;
-        [SerializeField] private SpriteRenderer bgCellPrefab;
-        [SerializeField] private float boardPadding = 0.08f;
+        [Header("Prefabs")]
+        public SpriteRenderer boardPrefab;
+        public CellData bgCellPrefab;
+         [SerializeField] private float boardPadding = 0.08f;
 
         private LevelData currentLevelData;
-
-        private void Awake()
+        public void SpawnBoard()
         {
-            SpawnBoard();
-        }
-
-        // ================= BOARD =================
-        private void SpawnBoard()
-        {
+            ClearBoard();
             float centerX = levelSizeX / 2f;
             float centerY = levelSizeY / 2f;
-
             var board = Instantiate(
                 boardPrefab,
                 new Vector3(centerX, centerY, 0),
@@ -46,18 +37,20 @@ namespace Connect.Generator
             {
                 for (int y = 0; y < levelSizeY; y++)
                 {
-                    Instantiate(
+                    var cellObj = Instantiate(
                         bgCellPrefab,
                         new Vector3(x + 0.5f, y + 0.5f, 0),
                         Quaternion.identity,
                         transform
                     );
+
+                    var cell = cellObj.GetComponent<CellData>();
+                    cell.x = x;
+                    cell.y = y;
                 }
             }
-
-            SetupCamera(centerX, centerY);
+             SetupCamera(centerX, centerY);
         }
-
         private void SetupCamera(float centerX, float centerY)
         {
             Camera cam = Camera.main;
@@ -66,24 +59,14 @@ namespace Connect.Generator
             cam.orthographicSize = maxSize / 2f + 0.5f;
             cam.transform.position = new Vector3(centerX, centerY, -10f);
         }
-
-        // ================= GENERATE =================
-        public void GenerateAndSave()
+        public void ClearBoard()
         {
-            CreateLevelData();
-
-            if (!TryGetComponent<GenerateMethod>(out var generator))
-            {
-                Debug.LogError("GenerateMethod not found!");
-                return;
-            }
-
-            generator.Generate(currentLevelData);
-
-            LevelJsonUtility.Save(currentLevelData);
+            while (transform.childCount > 0)
+                DestroyImmediate(transform.GetChild(0).gameObject);
         }
 
-        private void CreateLevelData()
+        [ContextMenu("Save Level")]
+        public void SaveLevel()
         {
             currentLevelData = new LevelData
             {
@@ -91,10 +74,18 @@ namespace Connect.Generator
                 width = levelSizeX,
                 height = levelSizeY
             };
+            currentLevelData.cells = new System.Collections.Generic.List<CellInfo>();
+            foreach (var cell in GetComponentsInChildren<CellData>())
+            {
+                currentLevelData.cells.Add(new CellInfo
+                {
+                    x = cell.x,
+                    y = cell.y,
+                    type = cell.type
+                });
+            }
+
+            LevelJsonUtility.Save(currentLevelData);
         }
-    }
-    public interface GenerateMethod
-    {
-        void Generate(LevelData levelData);
     }
 }

@@ -11,14 +11,13 @@ namespace Connect.Common
         public int width;
         public int height;
 
-        public List<CellData> cells = new List<CellData>();
+        public List<CellInfo> cells = new List<CellInfo>();
     }
-
-    [Serializable]
-    public class CellData
+    [System.Serializable]
+    public class CellInfo
     {
         public int x;
         public int y;
-        public int Id;
+        public BlockType type;
     }
 }
