@@ -43,10 +43,6 @@ public class LevelGeneratorEditor : EditorWindow
     }
     private void DrawLevelButtons()
     {
-        if (GUILayout.Button("CREATE LEVEL", GUILayout.Height(30)))
-        {
-            generator.SpawnBoard();
-        }
 
         if (GUILayout.Button("CLEAR LEVEL", GUILayout.Height(30)))
         {

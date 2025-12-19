@@ -1,101 +1,117 @@
-using UnityEditor;
 using UnityEngine;
+using UnityEditor;
 using Connect.Common;
+using System.Collections.Generic;
 
 namespace Connect.Generator
 {
-    [InitializeOnLoad]
-    public static class CellBrushEditor
+    [ExecuteAlways]
+    public class CellBrushEditor : MonoBehaviour
     {
+        public LevelGenerator level;
         public static BlockType CurrentType = BlockType.None;
 
-        static CellBrushEditor()
+        // Các ô brush đã đi qua
+        private HashSet<Vector2Int> visitedCells = new HashSet<Vector2Int>();
+
+        private int lastX = -1;
+        private int lastY = -1;
+
+        // ================= REGISTER EDITOR INPUT =================
+        private void OnEnable()
         {
             SceneView.duringSceneGui += OnSceneGUI;
         }
 
-        static CellData lastPaintedCell;
+        private void OnDisable()
+        {
+            SceneView.duringSceneGui -= OnSceneGUI;
+        }
 
-        static void OnSceneGUI(SceneView sceneView)
+        // ================= TRACK POSITION =================
+        private void Update()
+        {
+            if (level == null) return;
+
+            TrackBrushPosition();
+        }
+
+        private void TrackBrushPosition()
+        {
+            if (!level.WorldToGrid(transform.position, out int x, out int y))
+                return;
+
+            if (x == lastX && y == lastY)
+                return;
+
+            Vector2Int cell = new Vector2Int(x, y);
+            visitedCells.Add(cell);
+
+            lastX = x;
+            lastY = y;
+
+            // Snap brush vào tâm ô
+            transform.position = level.GridToWorldCenter(x, y);
+        }
+
+        // ================= HOTKEY (EDITOR) =================
+        private void OnSceneGUI(SceneView sceneView)
         {
             Event e = Event.current;
+            if (e == null) return;
 
-            Ray ray = HandleUtility.GUIPointToWorldRay(e.mousePosition);
-            RaycastHit2D hit = Physics2D.GetRayIntersection(ray, Mathf.Infinity);
+            if (!e.alt) return;
 
-            if (!hit)
+            // ALT + Q → Paint
+            if (e.type == EventType.KeyDown && e.keyCode == KeyCode.Q)
             {
-                lastPaintedCell = null;
-                return;
-            }
-
-            CellData cell = hit.collider.GetComponent<CellData>();
-            if (cell == null)
-            {
-                lastPaintedCell = null;
-                return;
-            }
-
-            // ================= HIGHLIGHT =================
-            DrawHighlight(cell);
-
-            // ================= PAINT =================
-            bool isLeftMouse = e.button == 0;
-            bool isErase = e.control || e.command;
-
-            if ((e.type == EventType.MouseDown || e.type == EventType.MouseDrag) && e.button == 0)
-            {
-                Debug.Log("oks");
-                if (cell != lastPaintedCell)
-                {
-                    if (isErase)
-                        Erase(cell);
-                    else
-                        Paint(cell);
-
-                    lastPaintedCell = cell;
-                }
-
+                PaintAll();
                 e.Use();
             }
 
-            if (e.type == EventType.MouseUp)
+            // ALT + Z → Clear
+            if (e.type == EventType.KeyDown && e.keyCode == KeyCode.Z)
             {
-                lastPaintedCell = null;
+                ClearList();
+                e.Use();
             }
         }
 
-        // ================= ACTIONS =================
-        static void Paint(CellData cell)
+        // ================= ACTION =================
+        private void PaintAll()
         {
-            if (cell.type == CurrentType)
-                return;
+            if (visitedCells.Count == 0) return;
 
-            Undo.RecordObject(cell, "Paint Cell");
-            cell.type = CurrentType;
-            EditorUtility.SetDirty(cell);
-        }
+            Undo.RecordObject(level, "Paint Brush Path");
 
-        static void Erase(CellData cell)
-        {
-            if (cell.type == BlockType.None)
-                return;
+            foreach (var cell in visitedCells)
+            {
+                level.PaintCell(cell.x, cell.y, CurrentType);
+            }
 
-            Undo.RecordObject(cell, "Erase Cell");
-            cell.type = BlockType.None;
-            EditorUtility.SetDirty(cell);
-        }
-
-        // ================= VISUAL =================
-        static void DrawHighlight(CellData cell)
-        {
-            Handles.color = Color.yellow;
-            Handles.DrawWireCube(
-                cell.transform.position,
-                Vector3.one * 0.98f
-            );
-
+            visitedCells.Clear();
             SceneView.RepaintAll();
+        }
+
+        private void ClearList()
+        {
+            visitedCells.Clear();
+            lastX = lastY = -1;
+            SceneView.RepaintAll();
+        }
+
+        // ================= PREVIEW =================
+        private void OnDrawGizmos()
+        {
+            if (level == null) return;
+
+            Gizmos.color = new Color(1f, 0f, 0f, 0.35f);
+
+            foreach (var cell in visitedCells)
+            {
+                Vector3 pos = level.GridToWorldCenter(cell.x, cell.y);
+                Gizmos.DrawCube(pos, Vector3.one * level.cellSize * 0.9f);
+            }
         }
     }
 }
