@@ -12,7 +12,7 @@ namespace Connect.Core
         public static GameContext Instance => _instance = _instance ?? new GameContext();
         public Data data { get; private set; } = new Data();
         public const int PixelPerUnit = 128;
-
+        public FileManager file { get; private set; } = new FileManager();
         public bool isRunning { get; private set; } = true;
 
         #region properties
@@ -21,6 +21,19 @@ namespace Connect.Core
             get
             {
                 return !this.isRunning;
+            }
+        }
+        private LocaleManager _locale;
+        public LocaleManager Locale
+        {
+            get
+            {
+                if (this._locale == null || !this._locale.isActiveAndEnabled)
+                {
+                    this._locale = GameObject.FindObjectsOfType<LocaleManager>()
+                        .FirstOrDefault(x => x.isActiveAndEnabled);
+                }
+                return this._locale;
             }
         }
         #endregion

@@ -21,6 +21,31 @@ namespace Connect.Core
                 return GameContext.Instance;
             }
         }
+
+        protected FileManager File
+        {
+            get
+            {
+                return GameContext.Instance.file;
+            }
+        }
+
+        protected LocaleManager Locale
+        {
+            get
+            {
+                return GameContext.Instance.Locale;
+            }
+        }
+
+        //protected NetworkManager Network
+        //{
+        //    get
+        //    {
+        //        return GameContext.Instance.network;
+        //    }
+        //}
+
         private EventSystem _eventSystem;
         protected EventSystem EventSystem
         {
@@ -51,6 +76,23 @@ namespace Connect.Core
             {
                 return;
             }
+            var audio = this.GetResource<AudioClip>($"Audio/SFX/{fileName}");
+            if (audio != null)
+            {
+                this.audioSource.loop = loop;
+                if (loop)
+                {
+                    if (!this.audioSource.isPlaying || !this.audioSource.clip.Equals(audio))
+                    {
+                        this.audioSource.clip = audio;
+                        this.audioSource.Play();
+                    }
+                }
+                else
+                {
+                    this.audioSource.PlayOneShot(audio);
+                }
+            }
         }
 
         public void StopAudio()
@@ -63,7 +105,17 @@ namespace Connect.Core
             this.audioSource.Stop();
         }
 
+        protected T GetResource<T>(string resourcePath) where T : UnityEngine.Object
+        {
+            return this.Context != null ? this.File.GetResource<T>(resourcePath) : Resources.Load<T>(resourcePath);
+        }
+
+        protected List<T> GetResources<T>(string resourcePath) where T : UnityEngine.Object
+        {
+            return this.Context != null ? this.File.GetResources<T>(resourcePath) : Resources.LoadAll<T>(resourcePath).ToList();
+        }
+
     }
 
-    
+
 }
