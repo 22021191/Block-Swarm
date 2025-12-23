@@ -153,7 +153,6 @@ namespace Connect.Core
             return successFileName;
         }
         #endregion
-
         #region Quản lý Thư mục
         public string[] GetDirectoryFilePaths<T>(string fileExtension = "json", string appendedDirectory = "", bool allowCache = false) where T : new()
         {

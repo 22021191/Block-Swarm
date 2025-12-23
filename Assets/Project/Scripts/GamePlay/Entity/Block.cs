@@ -19,9 +19,6 @@ namespace Connect.Core
     };
 
         public SpriteRenderer shadow;
-
-        protected override float SpriteOffsetY => 0.4f;
-        public override int PushStrength => 1;
         protected override string MovementAudio => "step2";
 
         private MovementType? lastMovementDirection;
@@ -42,24 +39,5 @@ namespace Connect.Core
             }
         }
 
-        public override void SetVisible()
-        {
-            base.SetVisible();
-            //this.ToggleShadow(true);
-        }
-
-        public override void SetInvisible()
-        {
-            base.SetInvisible();
-            this.ToggleShadow(false);
-        }
-
-        protected void ToggleShadow(bool show)
-        {
-            if (this.shadow != null)
-            {
-                this.shadow.color = this.shadow.color.WithA(show ? 0.6f : 0.0f);
-            }
-        }
     }
 }

@@ -8,10 +8,8 @@ using UnityEngine.EventSystems;
 namespace Connect.Core
 {
 
-    public abstract class BaseItem : BaseBehavior, IPointerDownHandler, IPointerUpHandler
+    public abstract class BaseItem : BaseBehavior
     {
-
-
         public interface IMovementValidation
         {
             bool IsTraversable(Vector2Int position, MovementType movement);
@@ -31,9 +29,6 @@ namespace Connect.Core
         }
 
         public static readonly TimeSpan MinimumInputSpan = TimeSpan.FromMilliseconds(300);
-
-        public Event OnMouseDownEvent = new Event();
-        public Event OnMouseUpEvent = new Event();
         public Ground.MovementEvent OnStartDestinationEvent = new Ground.MovementEvent();
         public Ground.OccupantEvent OnArriveDestinationEvent = new Ground.OccupantEvent();
 
@@ -42,26 +37,23 @@ namespace Connect.Core
         protected ParticleSystemRenderer particlesRenderer;
         public SpriteRenderer spriteRenderer;
 
-        //Animation
-        protected Animation animationObject;
-        protected AnimationEvents animationEvents;
-        private UnityAction<AnimationEvent> animationEndCallback { get; set; }
-
-        private bool isSpriteResolved { get; set; } = false;
-        private Rect activeInputBounds { get; set; }
-
         public Ground warehouseDestination { get; set; }
         public Ground warehouseDestinationQueue { get; set; }
         public bool isMoving { get; private set; } = false;
         public MovementType? movementDirection { get; private set; }
-        public bool isInputEnabled { get; private set; } = false;
         public BaseItem parent { get; private set; }
         public IMovementValidation validation { get; set; }
         public ITimeProvider timeProvider { get; set; }
-        //public WarehouseBuildItemRequest origin { get; set; }
+        public WarehouseBuildItemRequest origin { get; set; }
 
+        protected Animation animationObject;
+        protected AnimationEvents animationEvents;
+
+        private UnityAction<AnimationEvent> animationEndCallback { get; set; }
+        private bool isSpriteResolved { get; set; } = false;
+        private Bounds activeInputBounds { get; set; }
         private bool isPausedParticles { get; set; } = false;
-
+        private DateTime lastInput { get; set; }
 
         #region properties
         protected virtual string SpriteName => this.GetType().GetCustomAttribute<SpriteAttribute>().Name;
@@ -69,15 +61,13 @@ namespace Connect.Core
         public virtual ThumbnailAttribute Thumbnail => this.GetType().GetCustomAttribute<ThumbnailAttribute>();
         public virtual string ThumbnailSheet { get; } = "Images/thumbnails";
         protected virtual string SpriteKey { get; }
-        protected virtual float SpriteOffsetY { get; } = 0.0f;
+
         protected virtual float InputHeightOverride { get; } = 0.0f;
-        public virtual bool IsPushable { get; } = true;
         public virtual bool IsPassiveOccupant { get; } = false;
-        public virtual int PushStrength { get; } = 0;
         public virtual int SortAdjustment { get; } = 0;
         protected virtual string MovementAudio => "";
         protected virtual string ParticleAudio => "";
-        //sprite
+
         private SpriteRenderer _spriteRenderer;
         public SpriteRenderer SpriteRenderer
         {
@@ -87,12 +77,12 @@ namespace Connect.Core
                 {
                     this._spriteRenderer = this.spriteRenderer;
                     //this.LazyGet(ref this._spriteRenderer);
-                    //this.ResolveSprite();
+                    this.ResolveSprite();
                 }
                 return this._spriteRenderer;
             }
         }
-        //collider
+
         protected BoxCollider2D inputCollider;// => this.LazyGet(ref this._inputCollider);
 
         private Vector2Int? _warehouseIndex;
@@ -110,6 +100,15 @@ namespace Connect.Core
             }
         }
 
+        public int ZSort
+        {
+            get
+            {
+                var y = this.WarehouseIndex.HasValue ? this.WarehouseIndex.Value.y : -1;
+                return (int)(WarehouseManager.MaxSize - y) * 100 + this.SortAdjustment;
+            }
+        }
+
         public Bounds WorldBounds
         {
             get
@@ -117,6 +116,18 @@ namespace Connect.Core
                 var bounds = this.SpriteRenderer.bounds;
                 bounds.center = this.RootTransform.position;
                 return bounds;
+            }
+        }
+
+        public virtual WarehouseBuildItemRequest AsBuildItem
+        {
+            get
+            {
+                // preferably we use origin so the guid isn't recreated
+                var buildItem = this.origin ?? WarehouseBuildItemRequest.FromSprite(this.SpriteRenderer.sprite, this.WarehouseIndex.Value);
+                buildItem.column = this.WarehouseIndex.HasValue ? this.WarehouseIndex.Value.x : -1;
+                buildItem.row = this.WarehouseIndex.HasValue ? this.WarehouseIndex.Value.y : -1;
+                return buildItem;
             }
         }
 
@@ -128,16 +139,13 @@ namespace Connect.Core
             }
         }
         #endregion
+
+        // Start is called before the first frame update
         protected override void Start()
         {
             base.Start();
             this.animationObject = this.gameObject.GetComponentInChildren<Animation>();
             this.animationEvents = this.gameObject.GetComponentInChildren<AnimationEvents>();
-            if (this.animationEvents != null)
-            {
-                animationEvents.OnAnimationStartEvent.AddListener(this.OnAnimationStart);
-                animationEvents.OnAnimationEndEvent.AddListener(this.OnAnimationEnd);
-            }
             this.inputCollider = this.gameObject.GetComponentInChildren<BoxCollider2D>();
             if (this.inputCollider != null && this.InputHeightOverride != 0.0f)
             {
@@ -146,13 +154,14 @@ namespace Connect.Core
                 this.inputCollider.offset = this.inputCollider.offset.WithY(diffY);
             }
             this.ResolveSprite();
-            this.ToggleInput(this.isInputEnabled);
 
             if (this.particles != null)
             {
                 this.particlesRenderer = this.particles.gameObject.GetComponent<ParticleSystemRenderer>();
             }
         }
+
+        // Update is called once per frame
         protected virtual void Update()
         {
             if (!this.Context.isRunning)
@@ -180,7 +189,7 @@ namespace Connect.Core
 
             if (this.isMoving)
             {
-                if (!this.validation.IsTraversable(this.warehouseDestination.WarehouseIndex.Value, this.movementDirection.Value, this.PushStrength))
+                if (!this.validation.IsTraversable(this.warehouseDestination.WarehouseIndex.Value, this.movementDirection.Value))
                 {
                     this.CancelDestination();
                 }
@@ -190,30 +199,36 @@ namespace Connect.Core
                 }
             }
         }
-        #region events
 
-        public void OnPointerDown(PointerEventData eventData)
+        private void MoveToDestination(float timeSeconds)
         {
-
+            var maxDistance = timeSeconds * this.movementVelocity;
+            var currentPosition = this.RootTransform.position;
+            var remainingDistance = Vector2.Distance(this.RootTransform.position, this.warehouseDestination.RootTransform.position);
+            if (maxDistance > Math.Abs(remainingDistance))
+            {
+                this.ArriveDestination();
+                return;
+            }
+            this.RootTransform.position = Vector2.MoveTowards(this.RootTransform.position, this.warehouseDestination.RootTransform.position, maxDistance);
         }
 
-        public void OnPointerUp(PointerEventData eventData)
+        public virtual void ArriveDestination()
         {
+            var destination = this.warehouseDestination;
+            this.isMoving = false;
+            this.warehouseDestination = null;
+            this.OnArriveDestinationEvent.Invoke(destination, this);
+            this.movementDirection = null;
 
+            if (this.warehouseDestinationQueue != null)
+            {
+                this.warehouseDestination = this.warehouseDestinationQueue;
+                this.warehouseDestinationQueue = null;
+                this.StartDestination();
+            }
         }
 
-        protected virtual void OnAnimationStart(AnimationEvent animationEvent)
-        {
-        }
-
-        protected virtual void OnAnimationEnd(AnimationEvent animationEvent)
-        {
-            this.animationEndCallback?.Invoke(animationEvent);
-            this.animationEndCallback = null;
-        }
-
-        #endregion
-        #region Method
         private void StartDestination()
         {
             var direction = (this.warehouseDestination.WarehouseIndex.Value - this.WarehouseIndex.Value).AsMovementType();
@@ -228,9 +243,13 @@ namespace Connect.Core
                 }
             }
         }
-        protected virtual void OnValidate()
+
+        public void CancelDestination()
         {
-            this.ResolveSprite();
+            this.movementDirection = null;
+            this.isMoving = false;
+            this.warehouseDestination = null;
+            this.warehouseDestinationQueue = null;
         }
 
         protected void ResolveSprite()
@@ -249,28 +268,34 @@ namespace Connect.Core
             //this.CenterOn(renderer.transform.position, this.WarehouseIndex);
             this.isSpriteResolved = true;
         }
-        public virtual void ToggleInput(bool enableInput)
-        {
-            this.isInputEnabled = enableInput;
-            if (this.inputCollider != null)
-            {
-                this.inputCollider.isTrigger = this.isInputEnabled;
-                this.inputCollider.enabled = this.isInputEnabled;
-            }
 
-            var currentBounds = this.inputCollider != null ? this.inputCollider.bounds : this.SpriteRenderer.bounds;
-            if (this.isInputEnabled)
+        public void CenterOn(Vector3 position, Vector2Int? WarehouseIndex)
+        {
+            this.RootTransform.position = this.RootTransform.position
+                 .WithX(position.x)
+                 .WithY(position.y);
+            this.WarehouseIndex = WarehouseIndex;
+            this.SpriteRenderer.sortingOrder = this.ZSort;
+        }
+
+        public Vector2Int Distance(BaseItem other)
+        {
+            return this.WarehouseIndex.Value - other.WarehouseIndex.Value;
+        }
+
+        public void SetParent(BaseItem parent)
+        {
+            this.parent = parent;
+            if (this.parent != null)
             {
-                var center = currentBounds.center;
-                var size = currentBounds.size;
-                this.activeInputBounds = new Rect(center, size);
-            }
-            else
-            {
-                this.activeInputBounds = new Rect(currentBounds.center, Vector3.zero);
+                this.CenterOn(parent.RootTransform.position, parent.WarehouseIndex);
             }
         }
 
-        #endregion
+        protected void SetSprite(string spriteName)
+        {
+            this.SpriteRenderer.sprite = this.GetResources<Sprite>(this.Spritesheet)
+               .FirstOrDefault(x => x.name == spriteName);
+        }
     }
 }
