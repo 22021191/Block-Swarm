@@ -12,14 +12,12 @@ namespace Connect.Core
     {
         public interface IMovementValidation
         {
-            bool IsTraversable(Vector2Int position, MovementType movement);
+            bool IsTraversable(BaseItem mover, Vector2Int position, MovementType movement);
         }
-
         public interface ITimeProvider
         {
             uint TimeMs { get; }
         }
-
         public class Event : UnityEvent<BaseItem> { }
 
         public class MovementHistory : SimpleBaseData<MovementHistory>
@@ -43,7 +41,6 @@ namespace Connect.Core
         public MovementType? movementDirection { get; private set; }
         public BaseItem parent { get; private set; }
         public IMovementValidation validation { get; set; }
-        public ITimeProvider timeProvider { get; set; }
         public WarehouseBuildItemRequest origin { get; set; }
 
         protected Animation animationObject;
@@ -189,7 +186,7 @@ namespace Connect.Core
 
             if (this.isMoving)
             {
-                if (!this.validation.IsTraversable(this.warehouseDestination.WarehouseIndex.Value, this.movementDirection.Value))
+                if (!this.validation.IsTraversable(this, this.warehouseDestination.WarehouseIndex.Value, this.movementDirection.Value))
                 {
                     this.CancelDestination();
                 }

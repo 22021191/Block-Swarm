@@ -8,35 +8,64 @@ namespace Connect.Core
     [Thumbnail(Name = "thumbnail_player")]
     public class Block : BaseItem
     {
-        private static int animateFps = 10;
-        private static float animateDelta = 1.0f / animateFps;
-        private static Dictionary<MovementType, string[]> animateSeries = new Dictionary<MovementType, string[]>
-    {
-        { MovementType.Down, new string[]{ "player_d1", "player_d0", "player_d2" } },
-        { MovementType.Right, new string[]{ "player_r1", "player_r0", "player_r2" } },
-        { MovementType.Up, new string[]{ "player_u1", "player_u0", "player_u2" } },
-        { MovementType.Left, new string[]{ "player_l1", "player_l0", "player_l2" } }
-    };
-
+        public List<MovementType> directions = new List<MovementType>
+        {
+            MovementType.Up,
+            MovementType.Down,
+            MovementType.Left,
+            MovementType.Right
+        };
         public SpriteRenderer shadow;
+        private List<GameObject> _DirectonArrow = new List<GameObject>();
         protected override string MovementAudio => "step2";
-
         private MovementType? lastMovementDirection;
+        private void Awake()
+        {
+            _DirectonArrow.Clear();
+
+            foreach (Transform t in transform.GetComponentsInChildren<Transform>())
+            {
+                if (t != transform) // loại bỏ object cha
+                    _DirectonArrow.Add(t.gameObject);
+            }
+        }
+        protected void Start()
+        {
+            base.Start();
+            for (int i = 0; i < _DirectonArrow.Count; i++)
+            {
+                _DirectonArrow[i].SetActive(directions.Contains((MovementType)i));
+            }
+
+        }
+        protected override void Update()
+        {
+            base.Update();
+
+            if (this.Context.IsPaused)
+            {
+                return;
+            }
+
+        }
 
         public override void ArriveDestination()
         {
             this.lastMovementDirection = this.movementDirection;
             if (this.movementDirection.HasValue)
             {
-                this.Context.data.LogMovement(this, this.movementDirection.Value, this.timeProvider.TimeMs);
+                //this.Context.data.LogMovement(this, this.movementDirection.Value);
             }
 
             base.ArriveDestination();
 
             if (this.warehouseDestination == null)
             {
-                this.frameResetStep = animateDelta;
             }
+        }
+        public bool HasDirection(MovementType type)
+        {
+            return directions.Contains(type);
         }
 
     }

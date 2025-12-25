@@ -256,8 +256,8 @@ namespace Connect.Core
     {
         public int column { get; set; }
         public int row { get; set; }
-        public BoxType? boxType { get; set; }
-        public BoxType? markerType { get; set; }
+        public BlockType? boxType { get; set; }
+        public BlockType? markerType { get; set; }
         public string itemType { get; set; }
 
         #region properties

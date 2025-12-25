@@ -1,7 +1,7 @@
 ﻿using UnityEngine;
 namespace Connect.Core
 {
-    public enum BoxType
+    public enum BlockType
     {
         // [Sprite(Key = Marker.DefaultSpriteKey, Name = "marker_blue")]
         // [Sprite(Key = Box.DefaultSpriteKey, Name = "box_blue")]

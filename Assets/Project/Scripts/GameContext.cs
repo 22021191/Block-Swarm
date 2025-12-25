@@ -268,25 +268,25 @@ public static readonly bool IsDebugMode = true;
                 {
                     column = 1,
                     row = 5,
-                    boxType = BoxType.Blue
+                    boxType = BlockType.Blue
                 },
                 new WarehouseBuildItemRequest
                 {
                     column = 3,
                     row = 5,
-                    boxType = BoxType.Blue
+                    boxType = BlockType.Blue
                 },
                 new WarehouseBuildItemRequest
                 {
                     column = 5,
                     row = 5,
-                    boxType = BoxType.Blue
+                    boxType = BlockType.Blue
                 },
                 new WarehouseBuildItemRequest
                 {
                     column = 7,
                     row = 5,
-                    boxType = BoxType.Blue
+                    boxType = BlockType.Blue
                 },
                 // new WarehouseBuildItemRequest
                 // {

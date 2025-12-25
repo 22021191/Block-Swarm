@@ -20,9 +20,6 @@ namespace Connect.Core
         public Event OnInitializedEvent = new Event();
         public int defaultColumns = 6;
         public int defaultRows = 4;
-
-        public BaseItem.ITimeProvider timeProvider { get; set; }
-
         private Ground[][] grounds => this.activeData?.grounds;
         private List<BaseItem> activeItems => this.activeData?.activeItems;
         private Texture2D renderCanvas { get; set; }
@@ -123,7 +120,7 @@ namespace Connect.Core
 
             this.BuildGrounds();
             this.BuildItems();
-           
+
         }
 
         public bool PlaceItem(Sprite sprite, Ground ground) =>
@@ -143,14 +140,11 @@ namespace Connect.Core
             return true;
         }
 
-        private bool HasGround(Vector2Int? position) => position.HasValue && this.HasGround(position.Value.x, position.Value.y);
+        public bool HasGround(Vector2Int? position) => position.HasValue && this.HasGround(position.Value.x, position.Value.y);
         private bool HasGround(int column, int row)
         {
             return this.activeData.HasGround(column, row);
-            // return this.grounds != null &&
-            //     column >= 0 && this.grounds.Length > column &&
-            //     row >= 0 && this.grounds[column].Length > row &&
-            //     this.grounds[column][row] != null;
+            
         }
 
         private bool HasOccupant(Vector2Int? position) => position.HasValue && this.HasOccupant(position.Value.x, position.Value.y);
@@ -234,7 +228,7 @@ namespace Connect.Core
             var groundPosition = new Vector3(Ground.groundWidthUnits * column, Ground.groundHeightUnits * row);
             var ground = Instantiate(prefabReference, groundPosition, Quaternion.identity, this.groundHolder.transform).GetComponent<Ground>();
             ground.WarehouseIndex = new Vector2Int(column, row);
-            
+
             this.grounds[column][row] = ground;
             if (allowResize)
             {
@@ -273,7 +267,6 @@ namespace Connect.Core
             if (newItem != null)
             {
                 newItem.validation = this;
-                newItem.timeProvider = this.timeProvider;
                 newItem.origin = item;
                 return this.PlaceItem(newItem, item.column, item.row);
             }
@@ -306,18 +299,22 @@ namespace Connect.Core
                 .ToList();
         }
 
-        public bool IsTraversable(Vector2Int destination, MovementType movementType)
+        public bool IsTraversable(BaseItem mover,
+    Vector2Int destination,
+    MovementType movementType)
         {
             if (!this.HasGround(destination))
             {
                 return false;
             }
             var direction = movementType.GetAngle();
-
+            if (this.GetOccupant(destination).GetType() == mover.GetType())
+                return false;
             if (!this.HasOccupant(destination) ||
                 this.GetOccupant(destination).IsPassiveOccupant ||
                 this.GetOccupant(destination).isMoving ||
-                this.GetOccupant(destination).GetType() == typeof(Block))
+                (this.GetOccupant(destination).GetType() == typeof(Block) && 
+                !(mover.GetType() == typeof(WayBlocker))))
             {
                 return true;
             }
