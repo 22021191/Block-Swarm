@@ -170,7 +170,11 @@ namespace Connect.Core
                 }
                 return;
             }
+            this.Movement();
 
+        }
+        protected virtual void Movement()
+        {
             if (this.particles != null && this.isPausedParticles)
             {
                 this.isPausedParticles = false;
@@ -196,7 +200,6 @@ namespace Connect.Core
                 }
             }
         }
-
         private void MoveToDestination(float timeSeconds)
         {
             var maxDistance = timeSeconds * this.movementVelocity;

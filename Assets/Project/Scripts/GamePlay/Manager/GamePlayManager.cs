@@ -131,10 +131,26 @@ namespace Connect.Core
                     occupied[item.WarehouseIndex.Value] = item;
             }
 
+            // Track các swarm groups đã được xử lý để tránh xử lý lại
+            var processedSwarmGroups = new HashSet<SwarmBlock>();
+
             foreach (var item in ordered)
             {
                 if (!item.WarehouseIndex.HasValue)
                     continue;
+
+                // Nếu là SwarmBlock và đã được xử lý trong nhóm, bỏ qua
+                if (item is SwarmBlock swarmBlock)
+                {
+                    if (processedSwarmGroups.Contains(swarmBlock))
+                        continue;
+
+                    // Xử lý toàn bộ nhóm swarm blocks
+                    if (TryResolveSwarmGroup(swarmBlock, dir, occupied, result, processedSwarmGroups))
+                    {
+                        continue;
+                    }
+                }
 
                 Vector2Int from = item.WarehouseIndex.Value;
                 Vector2Int to = from + dir.GetAngle().AsVector2Int();
@@ -158,6 +174,74 @@ namespace Connect.Core
 
             return result;
         }
+
+        #region SWARM LOGIC
+
+        /// <summary>
+        /// Xử lý di chuyển cho toàn bộ nhóm swarm blocks
+        /// Nếu bất kỳ block nào trong nhóm không thể di chuyển, toàn bộ nhóm không di chuyển
+        /// </summary>
+        private bool TryResolveSwarmGroup(
+            SwarmBlock swarmBlock,
+            MovementType dir,
+            Dictionary<Vector2Int, BaseItem> occupied,
+            Dictionary<BaseItem, Ground> result,
+            HashSet<SwarmBlock> processedSwarmGroups)
+        {
+            var group = swarmBlock.GetConnectedGroup();
+            if (group == null || group.Count == 0)
+                return false;
+
+            // Đánh dấu tất cả các block trong nhóm đã được xử lý
+            foreach (var block in group)
+            {
+                if (block != null)
+                    processedSwarmGroups.Add(block);
+            }
+
+            // Kiểm tra xem nhóm có thể di chuyển theo hướng này không
+            if (!swarmBlock.CanGroupMove(dir))
+                return false;
+
+            // Kiểm tra tất cả các block trong nhóm có thể di chuyển không
+            var moves = new Dictionary<SwarmBlock, Vector2Int>();
+            foreach (var block in group)
+            {
+                if (block == null || !block.WarehouseIndex.HasValue)
+                    continue;
+
+                Vector2Int from = block.WarehouseIndex.Value;
+                Vector2Int to = from + dir.GetAngle().AsVector2Int();
+
+                if (!warehouseManager.HasGround(to))
+                    return false;
+
+                // Kiểm tra từng block có thể di chuyển không
+                if (!warehouseManager.IsTraversable(block, to, dir))
+                {
+                    // Thử push chain cho block này
+                    if (!TryResolvePush(block, to, dir, occupied, result))
+                    {
+                        return false; // Nếu không thể push, toàn bộ nhóm không di chuyển
+                    }
+                }
+
+                moves[block] = to;
+            }
+
+            // Nếu tất cả đều có thể di chuyển, đăng ký di chuyển cho tất cả
+            foreach (var move in moves)
+            {
+                var block = move.Key;
+                var from = block.WarehouseIndex.Value;
+                var to = move.Value;
+                RegisterMove(block, from, to, occupied, result);
+            }
+
+            return true;
+        }
+
+        #endregion
 
         #region PUSH LOGIC
 
